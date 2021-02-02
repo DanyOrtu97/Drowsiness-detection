@@ -146,6 +146,7 @@ def Preprocess(path1,window_size,stride,test_fold):
     folds_list = os.listdir(path1)
     for f, fold in enumerate(folds_list):
         print(fold)
+        if fold == "CEW": continue
         path1 = path + '/' + fold
         folder_list = os.listdir(path1)
         if fold==test_fold:
@@ -198,28 +199,6 @@ def Preprocess(path1,window_size,stride,test_fold):
                     # sweep a window over the blinks to chunk
                     alert_labels = 0 * np.ones([len(alert_blink_unrolled), 1])
 
-
-
-                '''
-                if txt_file=='semisleepy.txt':
-                    blinksTXT = path1 + '/' + folder + '/' + txt_file
-                    Freq = np.loadtxt(blinksTXT, usecols=1)
-                    Amp = np.loadtxt(blinksTXT, usecols=2)
-                    Dur = np.loadtxt(blinksTXT, usecols=3)
-                    Vel = np.loadtxt(blinksTXT, usecols=4)
-                    blink_num = len(Freq)
-
-
-                    normalized_blinks = normalize_blinks(blink_num, Freq, u_Freq, sigma_Freq, Amp, u_Amp, sigma_Amp, Dur,
-                                                     u_Dur, sigma_Dur,Vel, u_Vel, sigma_Vel)
-                    print('SEMIfreq: %f, SEMIamp: %f, SEMIdur: %f, SEMIvel: %f \n' % (np.mean(normalized_blinks[:,0]),
-                                                                                      np.mean(normalized_blinks[:,1]),
-                                                                                      np.mean(normalized_blinks[:,2]),
-                                                                                      np.mean(normalized_blinks[:,3])))
-
-                    semi_blink_unrolled = unroll_in_time(normalized_blinks, window_size, stride)
-                    semi_labels = 5* np.ones([len(semi_blink_unrolled), 1])
-                '''
                 if txt_file == 'sleepy.txt':
                     blinksTXT = path1 + '/' + folder + '/' + txt_file
                     Freq = np.loadtxt(blinksTXT, usecols=1)
@@ -261,8 +240,9 @@ def Preprocess(path1,window_size,stride,test_fold):
     else:
         print('We have %d training datapoints!!!' % len(labels))
         return output, labels, None, None
+
 #path1 is the address to the folder of all subjects, each subject has three txt files for alert, semisleepy and sleepy levels
-path1='Dataset/'
+path='Dataset/'
 test = "Full"
 window_size=30
 stride=2
@@ -283,7 +263,7 @@ def t_fold(name):
         return "Fold5"
     return "Full"
 #################Normalizing with respect to different individuals####First Phase
-blinks,labels,blinksTest,labelTest=Preprocess(path1,window_size,stride,test_fold=t_fold(test))
+blinks,labels,blinksTest,labelTest=Preprocess(path,window_size,stride,test_fold=t_fold(test))
 np.save(open(Training,'wb'),blinks)
 np.save(open(Train_Labels, 'wb'),labels)
 np.save(open(Testing, 'wb'),blinksTest)

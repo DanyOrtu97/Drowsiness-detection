@@ -99,18 +99,6 @@ def eye_aspect_ratio(eye):
     return ear
 
 
-# compute the mar of mouth
-def mouth_aspect_ratio(mouth):
-    A = dist.euclidean(mouth[14], mouth[18])
-    C = dist.euclidean(mouth[12], mouth[16])
-
-    if C < 0.1:
-        mar = 0.2
-    else:
-        mar = (A) / (C)  # compute the mouth aspect ratio
-
-    return mar
-
 
 # Emergency situation (eyes too long closed)
 def EMERGENCY(ear, COUNTER):
@@ -139,11 +127,7 @@ def blink_detector(output_file, input_video):
     print("Analizyng: " + str(input_video))
     print("TXT Output: " + str(output_file))
 
-    FRAME_MARGIN_BTW_2BLINKS = 3
     MIN_AMPLITUDE = 0.04
-    MOUTH_AR_THRESH = 0.35
-    MOUTH_AR_THRESH_ALERT = 0.30
-    MOUTH_AR_CONSEC_FRAMES = 20
 
     EPSILON = 0.01  # for discrete derivative (avoiding zero derivative)
 
@@ -239,19 +223,18 @@ def blink_detector(output_file, input_video):
                                 Last_Blink.endEAR - Last_Blink.peakEAR)):  # the amplitude is balanced
                             BLINK_READY = True
 
-                            #####THE ULTIMATE BLINK Check
+                            #THE ULTIMATE BLINK Check
                             Last_Blink.values = signal.convolve1d(Last_Blink.values, [1 / 3.0, 1 / 3.0, 1 / 3.0],
                                                                   mode='nearest')
 
-                            # Last_Blink.values=signal.median_filter(Last_Blink.values, 3, mode='reflect')
+                            Last_Blink.values=signal.median_filter(Last_Blink.values, 3, mode='reflect')
                             # #smoothing the signal
                             [MISSED_BLINKS, retrieved_blinks] = Ultimate_Blink_Check()
-                            TOTAL_BLINKS = TOTAL_BLINKS + len(
-                                retrieved_blinks)  # Finally, approving/counting the previous blink candidate
+                            TOTAL_BLINKS = TOTAL_BLINKS + len(retrieved_blinks)  # Finally, approving/counting the previous blink candidate
 
                             ###Now You can count on the info of the last separate and valid blink and analyze it
                             Counter4blinks = 0
-                            print("MISSED BLINKS= {}".format(len(retrieved_blinks)))
+                            print("RETRIVED BLINKS= {}".format(len(retrieved_blinks)))
                             return retrieved_blinks, int(TOTAL_BLINKS), Counter4blinks, BLINK_READY, skip
                         else:
                             skip = True
@@ -266,8 +249,7 @@ def blink_detector(output_file, input_video):
             if Counter4blinks > 1:
                 Current_Blink.end = reference_frame - 7  # reference-7 points to the last frame that eyes were closed
                 Current_Blink.endEAR = Current_Blink.EAR_of_FOI
-                Current_Blink.amplitude = (
-                                                  Current_Blink.startEAR + Current_Blink.endEAR - 2 * Current_Blink.peakEAR) / 2
+                Current_Blink.amplitude = (Current_Blink.startEAR + Current_Blink.endEAR - 2 * Current_Blink.peakEAR) / 2
                 Current_Blink.duration = Current_Blink.end - Current_Blink.start + 1
 
                 if Last_Blink.duration > 15:
@@ -310,9 +292,6 @@ def blink_detector(output_file, input_video):
 
     # initialize the frame counters and the total number of yawnings
     COUNTER = 0
-    MCOUNTER = 0
-    TOTAL = 0
-    MTOTAL = 0
     TOTAL_BLINKS = 0
     Counter4blinks = 0
     skip = False  # to make sure a blink is not counted twice in the Blink_Tracker function
@@ -329,7 +308,6 @@ def blink_detector(output_file, input_video):
     # right eye, respectively
     (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
     (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
-    (mStart, mEnd) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
     print("[INFO] starting video stream thread...")
 
     lk_params = dict(winSize=(13, 13),
@@ -340,8 +318,9 @@ def blink_detector(output_file, input_video):
     Frame_series = np.linspace(1, 13, 13)
     reference_frame = 0
     First_frame = True
-    top = tk.Tk()
-    frame1 = Frame(top)
+    top = tk.Tk() # plot ear into a figure
+    frame1 = Frame(top) # visualize video
+    #Draw eye contourn
     frame1.grid(row=0, column=0)
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -354,8 +333,7 @@ def blink_detector(output_file, input_video):
     # loop over frames from the video stream
 
     stream = cv2.VideoCapture(input_video)
-    start = datetime.datetime.now()
-    rotateCode = check_rotation(input_video)
+    rotateCode = check_rotation(input_video) #work only if it has metadata
     number_of_frames = 0
     while True:
         (grabbed, frame) = stream.read()
@@ -367,19 +345,11 @@ def blink_detector(output_file, input_video):
             frame = correct_rotation(frame, rotateCode)
 
         frame = imutils.resize(frame, width=450)
-        # frame = imutils.rotate(frame,-90)
-        # To Rotate by 90 degreees
-        # rows=np.shape(frame)[0]
-        # cols = np.shape(frame)[1]
-        # M = cv2.getRotationMatrix2D((cols / 2, rows / 2),-90, 1)
-        # frame = cv2.warpAffine(frame, M, (cols, rows))
-
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Brighten the image(Gamma correction)
         reference_frame = reference_frame + 1
         gray = adjust_gamma(gray, gamma=1.5)
         Q.put(frame)
-        end = datetime.datetime.now()
-        ElapsedTime = (end - start).total_seconds()
+
 
         # detect faces in the grayscale frame
         rects = detector(gray, 0)
@@ -392,27 +362,6 @@ def blink_detector(output_file, input_video):
             # array
             shape = predictor(gray, rects[0])
             shape = face_utils.shape_to_np(shape)
-
-            ###############YAWNING##################
-            #######################################
-            Mouth = shape[mStart:mEnd]
-            MAR = mouth_aspect_ratio(Mouth)
-
-            MouthHull = cv2.convexHull(Mouth)
-            cv2.drawContours(frame, [MouthHull], -1, (255, 0, 0), 1)
-
-            if MAR > MOUTH_AR_THRESH:
-                MCOUNTER += 1
-
-            elif MAR < MOUTH_AR_THRESH_ALERT:
-
-                if MCOUNTER >= MOUTH_AR_CONSEC_FRAMES:
-                    MTOTAL += 1
-
-                MCOUNTER = 0
-
-            ##############YAWNING####################
-            #########################################
 
             # extract the left and right eye coordinates, then use the
             # coordinates to compute the eye aspect ratio for both eyes
@@ -434,21 +383,9 @@ def blink_detector(output_file, input_video):
             cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
             cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
 
-            ############ HANDLING THE EMERGENCY SITUATION ################
-            ###########################################################
-            ###########################################################
-            COUNTER = EMERGENCY(ear, COUNTER)
-
-            # EMERGENCY SITUATION (EYES TOO LONG CLOSED) ALERT THE DRIVER IMMEDIATELY
-            ############ HANDLING THE EMERGENCY SITUATION ################
-            ###########################################################
-            ###########################################################
-
-            if Q.full() and (
-                    reference_frame > 15):  # to make sure the frame of interest for the EAR vector is int the mid
+            if Q.full() and (reference_frame > 15):  # to make sure the frame of interest for the EAR vector is int the mid
                 EAR_table = EAR_series
-                test = EAR_series
-                t = np.array([test[-1]])
+                t = np.array([EAR_table[-1]])
                 IF_Closed_Eyes = loaded_svm.predict(t.reshape(1, -1))
                 if Counter4blinks == 0:
                     Current_Blink = Blink()
@@ -558,8 +495,6 @@ def blink_detector(output_file, input_video):
 
                     Last_Blink.end = -10  # re initialization
 
-                    #####
-
                 line.set_ydata(EAR_series)
                 plot_frame.draw()
                 frameMinus7 = Q.get()
@@ -598,28 +533,12 @@ for f, fold in enumerate(folds_list):
         for file in files_per_person:
             if file.startswith("0"):
                 output_file = path1 + '/' + folder + '/' + 'alert.txt'
-            #elif file.startswith("10"):
-            #    output_file = path1 + '/' + folder + '/' + 'sleepy.txt'
-                blink_detector(output_file, path1 + '/' + folder + '/' + file)
-            # threads.append(Thread(target=blink_detector, args=(output_file, path1 + '/' + folder + '/' + file)))
-
-thread_queue = deque(maxlen=4)
+            elif file.startswith("10"):
+               output_file = path1 + '/' + folder + '/' + 'sleepy.txt'
+            blink_detector(output_file, path1 + '/' + folder + '/' + file)
 
 
-def video_queue_putter(thread_list):
-    for video in thread_list:
-        while (thread_queue.__len__() == 4):
-            time.sleep(5)
-        thread_queue.append(video)
-        video.start()
 
 
-def video_queue_getter(thread_list):
-    while not thread_queue.__len__() == 0:
-        if not thread_queue[0].is_alive():
-            thread_queue.pop()
 
-# putter = Thread(target=video_queue_putter, args=[threads])
-# getter = Thread(target=video_queue_getter, args=[threads])
-# putter.start()
-# getter.start()
+
